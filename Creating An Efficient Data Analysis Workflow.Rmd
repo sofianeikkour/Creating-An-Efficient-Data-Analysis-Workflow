@@ -1,0 +1,374 @@
+---
+title: "Creating An Efficient Data Analysis Workflow"
+author: "Sofiane Ikkour"
+output: html_document
+---
+## **Part 1**
+
+### **Context and Objective:**  
+
+This project is divided into two parts. In part 1, we will be acting as a data analyst for a company that sells books for learning programming. The company has produced multiple books, and each has received many reviews. The company has provided us with a dataset and wants us to check out the sales data and see if we can extract any useful information from it. Our main objective in this first part is to figure our what books are the most profitable. 
+
+### **Dataset:**  
+
+Below are the details of the dataset and the name of each column:  
+1. book: The book's title.  
+2. review: The review of each book.  
+3. state: The state in which the book was sold.   
+4. price: The price of the book.  
+
+**Editor:** This code was written on RStudio.  
+**Programming Language:** R.  
+**Packages:** readr, dplyr.  
+
+**Import the relevant libraries and read the dataset**
+```{r}
+library(readr) # load the relevant library
+
+# set our working directory
+setwd("C:/Users/Aylan/Documents/IT/DataQuest/R/Crearting An Efficient Data Analysis Workflow")
+
+# read the dataset
+data1 <- read_csv("book_reviews.csv", col_types = cols())
+
+# display the first few rows
+head(data1)
+```
+
+
+```{r}
+# display the dimension of the dataset
+dim(data1)
+```
+The dataset has 2000 rows and 4 columns. 
+
+```{r}
+# display the column names
+col_names <- colnames(data1)
+print(col_names)
+```
+
+
+```{r}
+# display the types of each of the columns
+for (c in col_names) {
+  print(paste("The type of the column", c, "is", typeof(c)))
+}
+```
+```{r}
+# extract unique elements 
+unique_elements_book <- unique(data1[["book"]])
+print(unique_elements_book)
+```
+```{r}
+# extract unique elements 
+unique_elements_review <- unique(data1[["review"]])
+print(unique_elements_review)
+```
+```{r}
+# extract unique elements 
+unique_elements_state <- unique(data1[["state"]])
+print(unique_elements_state)
+```
+**Insights:**  
+- The Results show that there are five book names in the dataset. Each one of them is about R programming.  
+- The review column has 6 unique values. One of the values is "NA" which means that the column has some missing values in it.  
+- The state column seems to have 8 unique values. However, we can notice that some values are actually the same state but named differently. For example, Texas state is named "Texas" and "TX". This would require us to rename the same state that has different names.
+
+### **Data processing**  
+Now that we are more familiar with the data itself we can get into more specific details. The first issue we will contend with is the issue of missing data. In R, we know that missing data are represented by NA(Not Available) like we saw previously with the state column. We have two ways of dealing with missing data, the first is to remove rows or columns with missing data if this doesn't imply losing useful information, the second way is imputation in which we can replace the missing data with approximations. 
+```{r}
+# calculate the number of missing values for each column
+for (c in col_names) {
+  print(paste("The number of missing values for the", c, "column:", sum(is.na(data1[[c]]))))
+}
+
+```
+The results above indicate that most of the columns have no missing values except for the review column which has 206 missing values. Since we have 2000 rows we can just remove those missing values.
+
+```{r}
+library(dplyr) # load the relevant library
+
+# create a copy of the dataset without the missing data
+data_clean <- data1 %>% 
+  filter(!(is.na(review)))
+
+# check again for missing values 
+for (c in col_names) {
+  print(paste("The number of missing values for the", c, "column:", sum(is.na(data_clean[[c]]))))
+}
+
+# display the new dimesion of the dataset
+cat("\n")
+print(paste("The new dimension of the dataset is:", nrow(data_clean), "rows and", ncol(data_clean), "columns"))
+```
+Now that we have removed all the missing data from the dataset, we need to deal with the state columns. We already noticed that in some cases the same state is labeled differently. We cited as an example the state of Texas which is labeled "Texas" ans "TX". We are going to fix this issue in order to have more consistent columns.
+```{r}
+# change shortened postal codes to full names
+data_clean <- data_clean %>% 
+  mutate(
+    state_full_name = case_when(
+      state == "TX" ~ "Texas",
+      state == "CA" ~ "California",
+      state == "NY" ~ "New York",
+      state == "FL" ~ "Florida",
+      state == "Texas" ~ "Texas",
+      state == "California" ~ "California",
+      state == "New York" ~ "New York",
+      state == "Florida" ~ "Florida"
+    )
+  )
+
+# extract unique elements for the state column 
+unique_elements_state <- unique(data_clean[["state_full_name"]])
+print(unique_elements_state)
+```
+Now, we will handle the reviews after we have noticed in the data exploration that the reviews take the form of strings, ranging from "Poor" to "Excellent". If we want to evaluate the ratings of each book, we need to convert the reviews to numeric data. 
+```{r}
+# create a new column that contains the numerical form of the review column
+data_clean <- data_clean %>%
+  mutate(
+    review_num = case_when(
+      review == "Poor" ~ 1,
+      review == "Fair" ~ 2,
+      review == "Good" ~ 3,
+      review == "Great" ~ 4,
+      review == "Excellent" ~ 5
+    )
+  )
+
+# create another column that describes whether or not a review has a high score
+data_clean <- data_clean %>% 
+  mutate(
+    is_high_review = if_else(review_num >= 4, TRUE, FALSE)
+  )
+
+# display the first few rows of the dataset
+head(data_clean)
+```
+**Analysis of the data**  
+Our main goal now is to figure out what books are the most profitable. Our dataset represents customer purchases and there are two ways to define "most profitable": the first way is to find the number of most sold books, the other way is to see how much money we earned from each book. 
+We'll choose the second metric to see how much money each book generated.
+```{r}
+# group the dataset by the book column and calculate the sum of price for each book
+most_profitable <- data_clean %>%
+  select(book, price) %>% 
+  group_by(book) %>% 
+  summarize(price = sum(price)) %>%
+  arrange(desc(price))
+
+# display the dataframe
+head(most_profitable)
+```
+According to the results above, the book titled "Secrets Of R For Advanced Students" is the most profitable book in terms of money generated followed by the book "Fundamental of R For Beginners".
+When analyzing the data further, we might want to find the relationship between the number of books sold and the different states to get an idea on how popular the books are in each state. 
+```{r}
+# group by the state_full_name and the book columns to calculate the number of books sold
+books_purchased <- data_clean %>%
+  select(state_full_name, book) %>%
+  group_by(state_full_name, book) %>%
+  summarize(book_count = n()) %>%
+  arrange(desc(book_count))
+
+# display the first few rows 
+head(books_purchased, 100)
+```
+The table above gives us a good insight about the existing relationship between state and the books purchased there. Some states have more interest in some books over others, so with this knowledge we can try to send more of these books to where they are more popular. 
+Based on the definition of high score we used, we can also figure out whether some books are more popular than others. 
+```{r}
+# group by the book column and calculate the sum of popularity score based on the is_high_review column
+most_popular_books <- data_clean %>%
+  select(book, is_high_review) %>%
+  group_by(book) %>%
+  summarize(score = sum(is_high_review)) %>%
+  arrange(desc(score))
+
+# display the first few rows
+head(most_popular_books)
+```
+We pretty much answered our question that asks if some books are more popular than others according to our definition of high score.
+
+## **Part 2**  
+
+### **Context and Objective:**  
+For the second part of this project, the company provided us another dataset that contains data on some of its 2019 book sales, and it wants us to extract some usable knowledge from it. It launched a new program encouraging more customers to buy more books on July 1st 2019, and it wants to know if this new program was successful at increasing sales and improving review quality.    
+
+### **Dataset**:
+
+Below are the details of the dataset and the name of each column:
+
+1. date: Date of purchase.
+2. user_submitted_review: Review submitted by user.
+3. title: Book's title.
+4. total_purchased: Total of books purchased.
+5. customer_type: Type of customer.
+
+**Read and explore the dataset**
+```{r}
+# load the dataset and assign it to a new variable names data2
+data2 <- read_csv("sales2019.csv", col_types = cols())
+
+# display the first few rows
+head(data2)
+```
+```{r}
+# use glimpse() function to have a summary of the data
+glimpse(data2)
+```
+```{r}
+# check for missing data
+for (c in colnames(data2)) {
+  print(paste("The number of missing values for the column", c, "is:", sum(is.na(data2[[c]]))))
+}
+```
+**Insights:**  
+- The dataset has 5000 rows and 5 columns.  
+- The types of the columns are of character type except for the total_purchased column which is of double type.  
+- There are many missing values in the user_submitted_review and total_purchased columns. Recall that our main goal is to see whether or not the new program increased book sales and improved review quality. The column total_purchased is important to answer this question. Therefore, this time we're going to remove only the missing values for the user_submitted_review column and we will handle those of the total_purchased column differently.
+
+**Process and clean the data**
+```{r}
+# remove the missing data in the user_submitted_review column
+data_clean2 <- data2 %>% filter(!(is.na(user_submitted_review)))
+
+# check if there is any missing data
+print(paste("Missing data in user_submitted_review column:",  sum(is.na(data_clean2[["user_submitted_review"]]))))
+print(paste("Missing data in total_purchased column:",  sum(is.na(data_clean2[["total_purchased"]]))))
+print(paste("Number of rows remaining in the dataset:", nrow(data_clean2)))
+```
+
+
+```{r}
+# the number of missing values in the total_purchased column is now 583 
+# we will replace those values by the average value of the entire column
+# calculate the mean of the total_purchased column
+avg_purchased <- round(mean(data_clean2$total_purchased, na.rm = TRUE))
+
+# fill all the missing values with the average value we just calculated
+data_clean2 <- data_clean2 %>% 
+  mutate(total_purchased = if_else(is.na(total_purchased), avg_purchased, total_purchased))
+
+# check for missing values
+print(paste("Missing data in total_purchased column:",  sum(is.na(data_clean2[["total_purchased"]]))))
+
+```
+The user_submitted_review column contains reviews in the form of sentences. Ultimately, we want to classify reviews as either positive or negative which allows us to count the number of positive and negative reviews in our analysis. Next, we'll perform the processing and cleaning necessary to turn each sentence into a classification. 
+
+```{r}
+# examine the unique sentences present in the user_submitted_review
+unique(data_clean2$user_submitted_review)
+```
+We have 9 unique sentences in this column. If we examine each sentence, we can notice that they contain words that can help us classify whether a sentence is a positive or a negative review. for example, the sentence "it was okay" contains the word "okay" so we can easily say that this is a positive review. What we need is a function that detects a word and classifies whether a sentence is positive or not. 
+```{r}
+# write a function that takes in a sentence and classifies it as positive or negative
+
+# load the relevant libraries
+library(stringr) 
+library(purrr)
+
+# the function
+classifier <- function(sentence) {
+  detector <- case_when(
+    str_detect(sentence, "okay") ~ "Positive",
+    str_detect(sentence, "Hated") ~ "Negative",
+    str_detect(sentence, "OK") ~ "Positive",
+    str_detect(sentence, "needed") ~ "Negative",
+    str_detect(sentence, "learned") ~ "Positive",
+    str_detect(sentence, "Awesome") ~ "Positive",
+    str_detect(sentence, "Never") ~ "Positive",
+    str_detect(sentence, "author's") ~ "Negative",
+    str_detect(sentence, "recommend") ~ "Negative",
+  )
+  return(detector)
+}
+
+# create a new column that contains the two classes: "Positive" or "Negative"
+data_clean2 <- data_clean2 %>%
+  mutate(new_review = unlist(map(user_submitted_review, classifier)))
+
+# select the old and new review columns
+review <- data_clean2 %>% 
+  select(user_submitted_review, new_review)
+# display some rows of review
+head(review, 100)
+```
+After carefully examining the two columns, it's safe to say that the new_review column we just created is perfectly consistent with the user_submitted_column. 
+
+**Next step:**  
+The program started on July 1st 2019 and the data we have contains all the sales for 2019. What we need is to distinguish between the sales that happened before the program started and those after so we can easily calculate the summary values we want from the data. The dates are represented in string form and must be properly formatted in order to make comparisons based on date and time. 
+
+```{r}
+library(lubridate) # load the relevant library
+
+# convert the new column to date format
+data_clean2$date_format <- mdy(data_clean2$date)
+
+# use glimpse() function to see how the column date looks like
+glimpse(data_clean2)
+```
+```{r}
+# create a new column that help distinguish sales before July 1s 2019 and sales after this date
+data_clean2 <- data_clean2 %>%
+  mutate(
+    before_after = if_else(date_format < ymd("2019-07-01"), "Before July 1, 2019", "After July 1, 2019")
+  )
+
+# display the first few rows
+head(data_clean2)
+```
+```{r}
+# create a summary table that compares the number of books sold before and after July 1, 2019
+summary_book_count <- data_clean2 %>%
+  group_by(before_after) %>%
+  summarize(book_sales = sum(total_purchased))
+
+# display the summary table
+head(summary_book_count)
+```
+The number of books purchased after the new program started is slightly lower overall with 21 less books sold. We can also calculate the number of books purchased by title, maybe some books were sold better than other.
+```{r}
+# create a summary table that compares the number of books sold for each title before and after July 1, 2019
+summary_book_count <- data_clean2 %>%
+  group_by(before_after, title) %>%
+  summarize(book_sales_by_title = sum(total_purchased))
+
+# display the summary table
+head(summary_book_count, 20)
+```
+It seems that some book titles performed better after the program. 
+It is also possible to subdivide our grouping method by using the customer_type column in order to compare how individual customers responded to the program versus business customers and see which of two categories bought more books in response to the program.  
+```{r}
+# create another summary table that takes into account the customer_type column
+summary_book_count_by_customer <- data_clean2 %>%
+  group_by(before_after, customer_type) %>%
+  summarize(book_count_by_customer = sum(total_purchased))
+
+# display the summary table
+head(summary_book_count_by_customer)
+```
+This summary table clearly indicates that the new program had a positive effect on businesses which bought more books after the new program started. However, the program didn't have that same positive effect on individual customers who bought less books before July 1, 2019. We can argue from these observations that this new program had a different effect on individual customers vs business customers. 
+
+Now, the second part of our question we need to answer is about review quality: did the new program helped improve review quality ? 
+To answer this question, we're going to use the new_review column we created in order to count the number of positive and negative reviews before and after July 1, 2019. We're going to create two summary tables like before, one that compares the overall number of reviews before and after July 1, 2019 and another one that compares the number of reviews by customer type.
+```{r}
+# create a summary table that compares review counts before and after the program
+summary_review_count <- data_clean2 %>%
+  group_by(before_after, new_review) %>%
+  summarize(review_count = n())
+
+# display the summary table
+head(summary_review_count)
+```
+Overall there is slightly less positive reviews and more negative reviews after the program. 
+```{r}
+# create a summary table that compares review counts by customer type
+summary_review_count_by_customer <- data_clean2 %>%
+  group_by(before_after, new_review, customer_type) %>%
+  summarize(review_count = n())
+
+# display the summary table
+head(summary_review_count_by_customer, 20)
+```
+This summary table indicates that only business customers added more positive reviews after the program started. 
+
+
